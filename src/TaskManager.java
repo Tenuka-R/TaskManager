@@ -195,4 +195,31 @@ public class TaskManager {
         }
         return best;
     }
+
+    public List<Integer> getStatistics() {
+        String sql = """
+        SELECT 
+            COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE priority = 'high') AS high_priority,
+            COUNT(*) FILTER (WHERE priority = 'medium') AS medium_priority,
+            COUNT(*) FILTER (WHERE priority = 'low') AS low_priority
+        FROM tasks
+        """;
+        try (Connection connection = DBConnection.connect();
+             PreparedStatement stmt = connection.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+
+            if (rs.next()) {
+                return List.of(
+                        rs.getInt("total"),
+                        rs.getInt("high_priority"),
+                        rs.getInt("medium_priority"),
+                        rs.getInt("low_priority")
+                    );
+                }
+            } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return List.of(0, 0, 0, 0);
+    }
 }

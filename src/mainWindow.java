@@ -5,6 +5,9 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableCellRenderer;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,6 +23,7 @@ public class mainWindow extends JFrame {
     private JButton plusButton;
     private JLabel sortText;
     private JComboBox sortOptions;
+    private JButton statsButton;
 
     private List<Task> displayedTasks = new ArrayList<>();
     private final TaskManager taskManager = new TaskManager();
@@ -127,6 +131,12 @@ public class mainWindow extends JFrame {
 
         sortOptions.addActionListener(e -> sortTasks());
         setVisible(true);
+        statsButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                displayStats();
+            }
+        });
     }
 
     private void loadAllTasks() {
@@ -231,6 +241,21 @@ public class mainWindow extends JFrame {
                     "Next suggested task",
                     JOptionPane.INFORMATION_MESSAGE);
         }
+    }
+
+    private void displayStats () {
+        List<Integer> stats = taskManager.getStatistics();
+        if (stats.get(0).equals(0)) {
+            JOptionPane.showMessageDialog(this, "No tasks have been created yet");
+            return;
+        }
+        JOptionPane.showMessageDialog(this, """
+                Total tasks: %d
+                High priority: %d
+                Medium priority: %s
+                Low priority: %d
+                """.formatted(stats.get(0), stats.get(1),
+                                stats.get(2), stats.get(3)));
     }
 
     public static void main(String[] args) {
