@@ -1,11 +1,7 @@
-package src;
+package task;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-
-enum Priority {
-    low, medium, high;
-}
 
 public class Task {
     private int id;

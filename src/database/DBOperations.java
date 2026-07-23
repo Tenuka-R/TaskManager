@@ -1,13 +1,14 @@
-package src;
+package database;
+
+import task.Priority;
+import task.Task;
+import task.TaskStats;
 
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public class TaskManager {
-    private static final List<String> SORT_COLUMNS = List.of(
-            "id","title","description","deadline","priority","completed"
-    );
+public class DBOperations {
 
     // READ METHODS
 
@@ -45,10 +46,9 @@ public class TaskManager {
         return tasks;
     }
 
-
-    public List<Task> sortTasks(String sortBy) {
+    public List<Task> sortTasks(String columnName) {
         List<Task> tasks = new ArrayList<>();
-        String sql = sortQuery(sortBy);
+        String sql = sortQuery(columnName);
 
         try (Connection connection = DBConnection.connect();
              Statement statement = connection.createStatement();
@@ -63,7 +63,7 @@ public class TaskManager {
         return tasks;
     }
 
-    public List<Task> searchTasks(String searchString) {
+    public List<Task> searchTasks(String searchTitle) {
         List<Task> matching = new ArrayList<>();
         String sql = "SELECT id, title, description, deadline, priority, completed " +
                 "FROM tasks WHERE title ILIKE ? ORDER BY id";
@@ -71,7 +71,7 @@ public class TaskManager {
         try (Connection connection = DBConnection.connect();
              PreparedStatement statement = connection.prepareStatement(sql)) {
 
-            statement.setString(1, "%" + searchString + "%");
+            statement.setString(1, "%" + searchTitle + "%");
 
             try (ResultSet rs = statement.executeQuery()) {
                 while (rs.next()) {
@@ -82,6 +82,38 @@ public class TaskManager {
             e.printStackTrace();
         }
         return matching;
+    }
+
+    public TaskStats getStatistics() {
+        String sql = """
+        SELECT 
+            COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE priority = 'high') AS high_priority,
+            COUNT(*) FILTER (WHERE priority = 'medium') AS medium_priority,
+            COUNT(*) FILTER (WHERE priority = 'low') AS low_priority,
+            COUNT(*) FILTER (WHERE completed = true) AS completed,
+            COUNT(*) FILTER (WHERE completed = false) AS pending
+        FROM tasks
+        """;
+
+        try (Connection connection = DBConnection.connect();
+             PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet rs = statement.executeQuery()) {
+
+            if (rs.next()) {
+                return new TaskStats(
+                        rs.getInt("total"),
+                        rs.getInt("high_priority"),
+                        rs.getInt("medium_priority"),
+                        rs.getInt("low_priority"),
+                        rs.getInt("completed"),
+                        rs.getInt("pending")
+                );
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return new TaskStats(0, 0, 0, 0, 0, 0);
     }
 
     // WRITE METHODS
@@ -120,6 +152,7 @@ public class TaskManager {
             statement.setString(4, task.getPriority());
             statement.setInt(5, task.getId());
             statement.executeUpdate();
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -153,6 +186,15 @@ public class TaskManager {
 
     // HELPER METHODS
 
+    private static final List<String> SORT_COLUMNS = List.of(
+            "id",
+            "title",
+            "description",
+            "deadline",
+            "priority",
+            "completed"
+    );
+
     private Task rowsToTask(ResultSet rs) throws SQLException {
         return new Task(
             rs.getInt("id"),
@@ -180,46 +222,5 @@ public class TaskManager {
             throw new IllegalArgumentException("Invalid sort column");
         }
         return "SELECT * FROM tasks ORDER BY " + sortBy;
-    }
-
-    public Task findNextTask() {
-        List<Task> pending = getPendingTasks();
-        if (pending.isEmpty()) {
-            return null;
-        }
-        Task best = pending.get(0);
-        for (Task task : pending) {
-            if (task.getScore() > best.getScore()) {
-                best = task;
-            }
-        }
-        return best;
-    }
-
-    public List<Integer> getStatistics() {
-        String sql = """
-        SELECT 
-            COUNT(*) AS total,
-            COUNT(*) FILTER (WHERE priority = 'high') AS high_priority,
-            COUNT(*) FILTER (WHERE priority = 'medium') AS medium_priority,
-            COUNT(*) FILTER (WHERE priority = 'low') AS low_priority
-        FROM tasks
-        """;
-        try (Connection connection = DBConnection.connect();
-             PreparedStatement stmt = connection.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-
-            if (rs.next()) {
-                return List.of(
-                        rs.getInt("total"),
-                        rs.getInt("high_priority"),
-                        rs.getInt("medium_priority"),
-                        rs.getInt("low_priority")
-                    );
-                }
-            } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return List.of(0, 0, 0, 0);
     }
 }

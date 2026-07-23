@@ -1,6 +1,11 @@
-package src;
+package ui;
 
 import com.toedter.calendar.JDateChooser;
+import database.DBOperations;
+import helpers.Placeholders;
+import task.Task;
+import task.Priority;
+
 import javax.swing.*;
 import java.awt.*;
 import java.text.SimpleDateFormat;
@@ -18,11 +23,11 @@ public class CreateOrEdit extends JDialog {
     private JButton actionButton;
     private JDateChooser datePicker;
 
-    private final TaskManager taskManager = new TaskManager();
     private final String titlePlaceholder = "Enter a title *";
     private final String descPlaceholder = "Enter a description";
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
     private Task task;
+    private DBOperations dbOperations = new DBOperations();
 
     public CreateOrEdit(JFrame parentComponent, Task task) {
         super(parentComponent, getWindowTitle(task), true);
@@ -94,14 +99,14 @@ public class CreateOrEdit extends JDialog {
 
         if (task == null) {
             Task newTask = new Task(title, description, deadline, Priority.valueOf(priority));
-            taskManager.addTask(newTask);
+            dbOperations.addTask(newTask);
 
         } else {
             task.setTitle(title);
             task.setDescription(description);
             task.setDeadline(deadline);
             task.setPriority(priority);
-            taskManager.updateTask(task);
+            dbOperations.updateTask(task);
         }
 
         dispose();

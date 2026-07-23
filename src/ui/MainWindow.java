@@ -1,86 +1,43 @@
-package src;
+package ui;
+
+import database.DBOperations;
+import helpers.Placeholders;
+import task.Task;
+import task.TaskMethods;
+import ui.components.ActionEditor;
+import ui.components.ActionRenderer;
+import ui.dialogs.*;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableCellRenderer;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
 import java.util.List;
 
-public class mainWindow extends JFrame {
+public class MainWindow extends JFrame {
 
     private JPanel mainPanel;
     private JTable dataTable;
     private JPanel subPanel;
     private JButton suggestButton;
-    private JTextField searchText;
-    private JButton resetButton;
-    private JButton completeButton;
     private JButton plusButton;
-    private JLabel sortText;
     private JComboBox sortOptions;
     private JButton statsButton;
+    private JTextField searchText;
+    private JButton clearSearch;
+    private JLabel sortText;
 
     private List<Task> displayedTasks = new ArrayList<>();
-    private final TaskManager taskManager = new TaskManager();
     private final String searchPlaceholder = "Search...";
+    private DBOperations dbOperations = new DBOperations();
+    private TaskMethods taskMethods = new TaskMethods(dbOperations);
 
-    class ButtonRenderer extends JButton implements TableCellRenderer {
-        public ButtonRenderer() {
-            setOpaque(true);
-        }
-
-        @Override
-        public Component getTableCellRendererComponent(JTable table, Object value,
-                                                       boolean isSelected, boolean hasFocus,
-                                                       int row, int column) {
-            setText(value.toString());
-            return this;
-        }
-    }
-
-    class ButtonEditor extends DefaultCellEditor {
-        private final JButton button;
-        private int currentRow;
-        private String action;
-
-        public ButtonEditor(JCheckBox checkBox) {
-            super(checkBox);
-            button = new JButton();
-
-            button.addActionListener(e -> {
-                fireEditingStopped();
-                if (action.equals("Edit")) {
-                    editTask(currentRow);
-                } else if (action.equals("Delete")) {
-                    deleteTask(currentRow);
-                }
-            });
-        }
-
-        @Override
-        public Component getTableCellEditorComponent(JTable table, Object value,
-                                                     boolean isSelected,
-                                                     int row, int column) {
-            currentRow = row;
-            action = value.toString();
-            button.setText(action);
-            return button;
-        }
-
-        @Override
-        public Object getCellEditorValue() {
-            return action;
-        }
-    }
-
-    public mainWindow() {
+    public MainWindow() {
         setTitle("Task manager");
         setContentPane(mainPanel);
-
         dataTable.setRowHeight(30);
         dataTable.setFillsViewportHeight(true);
         dataTable.setShowGrid(false);
@@ -90,26 +47,28 @@ public class mainWindow extends JFrame {
         dataTable.getTableHeader().setBackground(new Color(0xF0F0F0));
         dataTable.getTableHeader().setPreferredSize(new Dimension(0, 32));
 
-        dataTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
 
+        dataTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean selected,
                                                            boolean focus, int row, int column) {
                 Component component = super.getTableCellRendererComponent(
                         table, value, selected, focus, row, column);
+                String completed = table.getModel().getValueAt(row,4).toString();
                 if (selected) {
-                    component.setBackground(new Color(0x87CEFA));
+                    component.setBackground(Colors.LIGHT_BLUE);
+                } else if (completed.equals("Yes")) {
+                    component.setBackground(Colors.LIGHT_GREEN);
                 } else {
-                    if (row % 2 == 0) {
-                        component.setBackground(Color.LIGHT_GRAY);
-                    } else {
-                        component.setBackground(Color.WHITE);
-                    }
+                    component.setBackground(Colors.LIGHT_RED);
                 }
                 setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
                 return component;
             }
         });
+        DefaultTableCellRenderer centerHeadings = new DefaultTableCellRenderer();
+        centerHeadings.setHorizontalAlignment(SwingConstants.CENTER);
+        dataTable.getTableHeader().setDefaultRenderer(centerHeadings);
 
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(1200, 800);
@@ -118,18 +77,18 @@ public class mainWindow extends JFrame {
 
         searchText.addActionListener(e -> searchTasks());
         Placeholders.addPlaceholder(searchText, searchPlaceholder);
-        resetButton.addActionListener(e -> resetSearch());
+        clearSearch.addActionListener(e -> resetSearch());
         suggestButton.addActionListener(e -> showNextTask());
-        completeButton.addActionListener(e -> toggleComplete());
 
         plusButton.addActionListener(e -> {
-            CreateOrEdit createEditWindow = new CreateOrEdit(mainWindow.this, null);
+            CreateOrEdit createEditWindow = new CreateOrEdit(MainWindow.this, null);
             createEditWindow.setVisible(true);
             loadAllTasks();
         });
 
         sortOptions.addActionListener(e -> sortTasks());
         setVisible(true);
+
         statsButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -139,24 +98,16 @@ public class mainWindow extends JFrame {
     }
 
     private void loadAllTasks() {
-        refreshTable(taskManager.getTasks());
+        refreshTable(dbOperations.getTasks());
     }
 
-    public void toggleComplete() {
-        int rowNumber = dataTable.getSelectedRow();
-        if (rowNumber == -1) {
-            JOptionPane.showMessageDialog(this, "Please select a task to toggle complete");
-            return;
-        }
+    public void toggleComplete(int rowNumber) {
         Task selectedTask = displayedTasks.get(rowNumber);
-        taskManager.toggleComplete(selectedTask);
+        dbOperations.toggleComplete(selectedTask);
         loadAllTasks();
     }
 
     public void deleteTask(int rowNumber) {
-        if (rowNumber < 0 || rowNumber >= displayedTasks.size()) {
-            return;
-        }
         Task selectedTask = displayedTasks.get(rowNumber);
 
         int confirm = JOptionPane.showConfirmDialog(
@@ -169,14 +120,11 @@ public class mainWindow extends JFrame {
             return;
         }
 
-        taskManager.deleteTask(selectedTask);
+        dbOperations.deleteTask(selectedTask);
         loadAllTasks();
     }
 
     public void editTask(int rowNumber) {
-        if (rowNumber < 0 || rowNumber >= displayedTasks.size()) {
-            return;
-        }
         Task selectedTask = displayedTasks.get(rowNumber);
         CreateOrEdit editWindow = new CreateOrEdit(this, selectedTask);
         editWindow.setVisible(true);
@@ -185,12 +133,12 @@ public class mainWindow extends JFrame {
 
     private void refreshTable(List<Task> tasks) {
         displayedTasks = tasks;
-        String[] columnNames = {"Title", "Description", "Deadline", "Priority", "Completed", "", ""};
+        String[] columnNames = {"Title", "Description", "Deadline", "Priority", "Completed", "Actions"};
 
         DefaultTableModel model = new DefaultTableModel(columnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return column == 5 || column == 6;
+                return column == 5;
             }
         };
 
@@ -198,15 +146,15 @@ public class mainWindow extends JFrame {
             String completed = task.getCompleted() ? "Yes" : "No";
             model.addRow(new Object[]{
                     task.getTitle(), task.getDescription(), task.getDeadline(),
-                    task.getPriority(), completed, "Edit", "Delete"
+                    task.getPriority(), completed, "Actions"
             });
         }
 
         dataTable.setModel(model);
-        dataTable.getColumnModel().getColumn(5).setCellRenderer(new ButtonRenderer());
-        dataTable.getColumnModel().getColumn(5).setCellEditor(new ButtonEditor(new JCheckBox()));
-        dataTable.getColumnModel().getColumn(6).setCellRenderer(new ButtonRenderer());
-        dataTable.getColumnModel().getColumn(6).setCellEditor(new ButtonEditor(new JCheckBox()));
+        dataTable.getColumnModel().getColumn(5).setCellRenderer(new ActionRenderer());
+        dataTable.getColumnModel().getColumn(5).setCellEditor(new ActionEditor(this));
+        dataTable.getColumnModel().getColumn(5).setPreferredWidth(240);
+        dataTable.getColumnModel().getColumn(5).setMinWidth(240);
     }
 
     private void resetSearch() {
@@ -216,7 +164,7 @@ public class mainWindow extends JFrame {
 
     private void searchTasks() {
         String inputText = searchText.getText();
-        List<Task> filteredTasks = taskManager.searchTasks(inputText);
+        List<Task> filteredTasks = dbOperations.searchTasks(inputText);
         refreshTable(filteredTasks);
     }
 
@@ -225,12 +173,12 @@ public class mainWindow extends JFrame {
         if (sortField.equals("(none)")) {
             loadAllTasks();
         } else {
-            refreshTable(taskManager.sortTasks(sortField));
+            refreshTable(dbOperations.sortTasks(sortField));
         }
     }
 
     private void showNextTask() {
-        Task nextTask = taskManager.findNextTask();
+        Task nextTask = taskMethods.getNextTask();
         if (nextTask == null) {
             JOptionPane.showMessageDialog(this, "No tasks have been created yet",
                     "No tasks created", JOptionPane.INFORMATION_MESSAGE);
@@ -241,24 +189,13 @@ public class mainWindow extends JFrame {
                     JOptionPane.INFORMATION_MESSAGE);
         }
     }
-
-    private void displayStats () {
-        List<Integer> stats = taskManager.getStatistics();
-        if (stats.get(0).equals(0)) {
-            JOptionPane.showMessageDialog(this, "No tasks have been created yet");
-            return;
-        }
-        JOptionPane.showMessageDialog(this, """
-                Total tasks: %d
-                High priority: %d
-                Medium priority: %s
-                Low priority: %d
-                """.formatted(stats.get(0), stats.get(1),
-                                stats.get(2), stats.get(3)));
+    private void displayStats() {
+        StatsDialog.display(this, dbOperations.getStatistics());
     }
 
+
     public static void main(String[] args) {
-        mainWindow window = new mainWindow();
+        MainWindow window = new MainWindow();
     }
 
     {
@@ -296,12 +233,9 @@ public class mainWindow extends JFrame {
         suggestButton = new JButton();
         suggestButton.setText("Suggest next");
         subPanel.add(suggestButton, new com.intellij.uiDesigner.core.GridConstraints(2, 0, 1, 1, com.intellij.uiDesigner.core.GridConstraints.ANCHOR_CENTER, com.intellij.uiDesigner.core.GridConstraints.FILL_NONE, com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_CAN_SHRINK | com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_CAN_GROW, com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        resetButton = new JButton();
-        resetButton.setText("Reset search");
-        subPanel.add(resetButton, new com.intellij.uiDesigner.core.GridConstraints(1, 2, 1, 1, com.intellij.uiDesigner.core.GridConstraints.ANCHOR_CENTER, com.intellij.uiDesigner.core.GridConstraints.FILL_HORIZONTAL, com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_CAN_SHRINK | com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_CAN_GROW, com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        completeButton = new JButton();
-        completeButton.setText("Toggle complete");
-        subPanel.add(completeButton, new com.intellij.uiDesigner.core.GridConstraints(1, 0, 1, 1, com.intellij.uiDesigner.core.GridConstraints.ANCHOR_CENTER, com.intellij.uiDesigner.core.GridConstraints.FILL_HORIZONTAL, com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_CAN_SHRINK | com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_CAN_GROW, com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        clearSearch = new JButton();
+        clearSearch.setText("Reset search");
+        subPanel.add(clearSearch, new com.intellij.uiDesigner.core.GridConstraints(1, 2, 1, 1, com.intellij.uiDesigner.core.GridConstraints.ANCHOR_CENTER, com.intellij.uiDesigner.core.GridConstraints.FILL_HORIZONTAL, com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_CAN_SHRINK | com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_CAN_GROW, com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         sortText = new JLabel();
         sortText.setText("Sort by:");
         subPanel.add(sortText, new com.intellij.uiDesigner.core.GridConstraints(2, 1, 1, 1, com.intellij.uiDesigner.core.GridConstraints.ANCHOR_WEST, com.intellij.uiDesigner.core.GridConstraints.FILL_NONE, com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_FIXED, com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
